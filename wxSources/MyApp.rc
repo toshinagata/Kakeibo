@@ -1,0 +1,2 @@
+icon ICON "../Resources/icon.ico"
+#include "wx/msw/wx.rc"
