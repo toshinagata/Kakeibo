@@ -25,8 +25,8 @@
 
 using json = nlohmann::json;
 
-//  Shared variable to show the thread status
-std::atomic<int> thread_status(0);
+//  Shared variable to show the server status
+std::atomic<int> server_status(0);
 
 static std::thread *server_thread = nullptr;
 static httplib::Server *svr = nullptr;
@@ -139,7 +139,11 @@ handlePost(json &j, httplib::Response &res)
       ret = "[]";
     }
   } else if (cmd == "terminate") {
-    svr->stop();
+    server_status = 4;  //  terminate is requested by the client
+    //  Queue an idle event for the main thread (to notify this thread ended)
+    wxIdleEvent* evt = new wxIdleEvent;
+    wxTheApp->QueueEvent(evt);
+//    svr->stop();
   }
   res.set_content(ret, type);
 }
@@ -147,8 +151,6 @@ handlePost(json &j, httplib::Response &res)
 void
 runServer(int port, std::string rootDir)
 {
-  svr = new httplib::Server();
-  thread_status = 1;
   try {
     auto ret = svr->set_mount_point("/", rootDir);
     if (!ret) {
@@ -158,22 +160,11 @@ runServer(int port, std::string rootDir)
       json j = json::parse(req.body);
       handlePost(j, res);
     });
-    svr->listen("0.0.0.0", port);
+    server_status = 1;
+    svr->listen("127.0.0.1", port);
+    server_status = 2;  //  Normal end of this thread
   } catch (...) {
-  }
-  thread_status = 2;  //  End of this thread
-
-  //  Queue an idle event for the main thread
-  wxIdleEvent* evt = new wxIdleEvent;
-  wxTheApp->QueueEvent(evt);
-  
-  if (server_thread != nullptr) {
-    delete server_thread;
-    server_thread = nullptr;
-  }
-  if (svr != nullptr) {
-    delete svr;
-    svr = nullptr;
+    server_status = 3;  //  Abnormal end of this thread
   }
 }
 
@@ -266,6 +257,9 @@ wxEND_EVENT_TABLE()
 bool
 MyApp::OnInit()
 {
+  //  Disable any wxLog functionality (otherwise ::exit() may crash)
+  wxLog::EnableLogging(false);
+
   //  Examine which port is open
   int port = 8081;
   {
@@ -310,8 +304,8 @@ MyApp::OnInit()
   wxString distDir = wxStandardPaths::Get().GetResourcesDir() + wxT("/dist");
   
   //  Run the server in a separate thread.
+  svr = new httplib::Server();
   server_thread = new std::thread(runServer, port, distDir.utf8_string());
-  server_thread->detach();
   
   //  Run the browser
   //  TODO: Use wxWebView in the current process
@@ -380,9 +374,12 @@ MyApp::OnInit()
 int
 MyApp::OnExit()
 {
-  if (thread_status != 2) {
-    terminateServer();
+  if (svr != nullptr && (server_status == 1 || server_status == 4)) {
+    server_status = 0;
+    svr->stop();
   }
+  if (server_thread->joinable())
+    server_thread->join();
   return wxApp::OnExit();
 }
 wxIMPLEMENT_APP(MyApp);
@@ -390,7 +387,9 @@ wxIMPLEMENT_APP(MyApp);
 void
 MyApp::OnIdle(wxIdleEvent &WXUNUSED(event))
 {
-  if (thread_status == 2) {
+  if (svr != nullptr && server_status == 4) {
+    server_status = 0;
+    svr->stop();
     wxExit();
   }
 }
