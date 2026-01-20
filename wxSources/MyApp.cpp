@@ -20,7 +20,11 @@
 #include "MyApp.h"
 #include "MyFrame.h"
 
-#include "httplib.h"
+#include "mongoose.h"
+#include <thread>
+#include <atomic>
+
+//#include "httplib.h"
 #include <nlohmann/json.hpp>
 
 using json = nlohmann::json;
@@ -29,15 +33,18 @@ using json = nlohmann::json;
 std::atomic<int> server_status(0);
 
 static std::thread *server_thread = nullptr;
-static httplib::Server *svr = nullptr;
+
+struct mg_mgr mgr;
+
+//static httplib::Server *svr = nullptr;
 
 void
-handlePost(json &j, httplib::Response &res)
+handlePost(struct mg_connection *c, json &j)
 {
   std::string cmd = j["cmd"];
   std::string ret;
   std::string type = "text/plain";
-
+  
   //  std::string and wxString
   //  The strings in json and in res are std::string encoded in UTF-8.
   //  On UNIX-like systems like macOS and linux, the default encoding for wxString
@@ -47,7 +54,7 @@ handlePost(json &j, httplib::Response &res)
   //  wxConvUTF8 for other strings.
   
   if (j["id"] != wxGetApp().m_randomId.ToStdString()) {
-    res.status = httplib::StatusCode::Unauthorized_401;
+    mg_http_reply(c, 401, "", "");  /*  Unauthorized  */
     return;
   }
   if (cmd == "homeDir") {
@@ -139,45 +146,60 @@ handlePost(json &j, httplib::Response &res)
       ret = "[]";
     }
   } else if (cmd == "terminate") {
-    server_status = 4;  //  terminate is requested by the client
-    //  Queue an idle event for the main thread (to notify this thread ended)
-    wxIdleEvent* evt = new wxIdleEvent;
-    wxTheApp->QueueEvent(evt);
-//    svr->stop();
+    server_status = 2;  //  terminate is requested by the client
   }
-  res.set_content(ret, type);
+  type = "Content-Type: " + type + "\r\n";
+  mg_http_reply(c, 200, type.c_str(), "%s", ret.c_str());
+}
+
+static struct mg_http_serve_opts sServeOpts;
+
+static void
+eventHandler(struct mg_connection *c, int ev, void *ev_data)
+{
+  if (ev == MG_EV_HTTP_MSG) {  // New HTTP request received
+    struct mg_http_message *hm = (struct mg_http_message *) ev_data;  // Parsed HTTP request
+    if (mg_match(hm->uri, mg_str("/@vueRunner/"), NULL)) {
+      if (strncmp(hm->method.buf, "POST", hm->method.len) != 0) {
+        mg_http_reply(c, 405, "", "");  /*  Method not allowed  */
+      } else {
+        json j = json::parse(hm->body.buf);
+        handlePost(c, j);
+      }
+    } else {
+      mg_http_serve_dir(c, hm, &sServeOpts);  // For all other URLs, Serve static files
+    }
+  }
 }
 
 void
 runServer(int port, std::string rootDir)
 {
-  try {
-    auto ret = svr->set_mount_point("/", rootDir);
-    if (!ret) {
-      printf("return value %d\n", (int)ret);
-    }
-    svr->Post("/@vueRunner/", [](const httplib::Request &req, httplib::Response &res) {
-      json j = json::parse(req.body);
-      handlePost(j, res);
-    });
-    server_status = 1;
-    svr->listen("127.0.0.1", port);
-    server_status = 2;  //  Normal end of this thread
-  } catch (...) {
-    server_status = 3;  //  Abnormal end of this thread
+  std::string server_url = "http://127.0.0.1:" + std::to_string(port);
+  mg_mgr_init(&mgr);  // Initialise event manager
+  memset(&sServeOpts, 0, sizeof(sServeOpts));
+  sServeOpts.root_dir = strdup(rootDir.c_str());
+  sServeOpts.fs = &mg_fs_posix;
+  server_status = 1;
+  mg_http_listen(&mgr, server_url.c_str(), eventHandler, NULL);
+  while (server_status == 1) {
+    mg_mgr_poll(&mgr, 1000);  // Infinite event loop
   }
+  server_status = 3;  //  End of server thread
 }
 
 void
 terminateServer()
 {
-  //  Initialize an httplib client
-  wxString urlStr = wxString::Format(wxT("http://127.0.0.1:%d"), wxGetApp().m_port);
+  //  Tell the server thread to terminate
+  server_status = 2;
+/*  wxString urlStr = wxString::Format(wxT("http://127.0.0.1:%d"), wxGetApp().m_port);
   httplib::Client cli(urlStr.utf8_string());
   httplib::Headers headers = {};
   std::string body = "{\"id\":\"" + wxGetApp().m_randomId.ToStdString() + "\"}";
   //  Post terminate command
   auto res = cli.Post("/@vueRunner/terminate", headers, body, "application/json");
+ */
 }
 
 FILE *fp = NULL;
@@ -285,7 +307,8 @@ MyApp::OnInit()
   //  Create random id.
   {
     char s[16];
-    std::mt19937 mt{ std::random_device{}() };
+    mg_random_str(s, sizeof(s));
+/*    std::mt19937 mt{ std::random_device{}() };
     std::uniform_int_distribution<int> dist(0, 61);
     for (int i = 0; i < 15; i++) {
       int r = dist(mt);
@@ -297,14 +320,13 @@ MyApp::OnInit()
         s[i] = '0' + r - 52;
       }
     }
-    s[15] = 0;
+    s[15] = 0; */
     m_randomId = wxString(s);
   }
   //  Determine the root directory.
   wxString distDir = wxStandardPaths::Get().GetResourcesDir() + wxT("/dist");
   
   //  Run the server in a separate thread.
-  svr = new httplib::Server();
   server_thread = new std::thread(runServer, port, distDir.utf8_string());
   
   //  Run the browser
@@ -374,9 +396,8 @@ MyApp::OnInit()
 int
 MyApp::OnExit()
 {
-  if (svr != nullptr && (server_status == 1 || server_status == 4)) {
-    server_status = 0;
-    svr->stop();
+  if (server_status <= 1) {
+    terminateServer();
   }
   if (server_thread->joinable())
     server_thread->join();
@@ -387,9 +408,7 @@ wxIMPLEMENT_APP(MyApp);
 void
 MyApp::OnIdle(wxIdleEvent &WXUNUSED(event))
 {
-  if (svr != nullptr && server_status == 4) {
-    server_status = 0;
-    svr->stop();
+  if (server_status >= 3) {
     wxExit();
   }
 }

@@ -22,7 +22,7 @@ WX_VER = 3.2
 APPNAME = $(shell echo $${PRODUCT_NAME:-wxVueRunner})
 
 #  Object files
-OBJECTS = MyApp.o MyFrame.o
+OBJECTS = MyApp.o MyFrame.o mongoose.o
 
 
 #  wx libraries
