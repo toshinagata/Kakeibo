@@ -43,7 +43,7 @@ GPL3 です。(https://www.gnu.org/licenses/gpl-3.0.html)
 * wxWidgets (https://wxwidgets.org/)
 * Vue.js (https://vuejs.org/)
 * Tauri (https://v2.tauri.app/)
-* cpp-httplib (https://github.com/yhirose/cpp-httplib)
+* Mongoose (https://mongoose.ws/)
 * nlohmann JSON Library (https://github.com/nlohmann/json)
 
 ##  作者について

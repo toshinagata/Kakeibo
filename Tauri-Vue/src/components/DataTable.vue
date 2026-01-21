@@ -368,7 +368,7 @@ function updateHeight(height: string) {
           <template v-else>
             <optgroup v-for="(option,index) in props.source.selectItems(editColumn)"
               :key="index" :label="option.opt">
-              <option v-for="(item,index2) in option.items" :key="index*100+index2" :value="item">
+              <option v-for="(item,index2) in option.items" :key="index*100+Number(index2)" :value="item">
                 {{ item }}
               </option>
             </optgroup>

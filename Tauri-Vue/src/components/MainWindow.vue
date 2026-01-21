@@ -30,7 +30,7 @@ import { homeDir, join } from "@tauri-apps/api/path";
 import { mkdir, exists, create, rename, remove, readTextFile, writeTextFile, readDir }
   from "@tauri-apps/plugin-fs";
 import { save } from "@tauri-apps/plugin-dialog";
-import { vHomeDir, vJoin, vMkdir, vExists, vCreate, vRename, vRemove, vReadTextFile, vWriteTextFile, vReadDir }
+import { vHomeDir, vJoin, vMkdir, vExists, vCreate, vRename, vRemove, vReadTextFile, vWriteTextFile, vReadDir, vTerminate, vListenToServer }
   from "../vueRunner.ts";
 
 /*  テスト用データ（デバッグ用）  */
@@ -772,6 +772,18 @@ onMounted(async () => {
   await initializeData();
   await initializeBookNames();
   intervalID = setInterval(timerHandler, 1000);
+  if (await isVueRunnerAvailable()) {
+    window.addEventListener('beforeunload', (event) => {
+      event.stopImmediatePropagation();   /* 離脱防止アラートを抑制する */
+      vTerminate();  /* サーバを終了する  */
+    }, true);
+    vListenToServer(async (event) => {
+      if (event.data === "stop") {
+        await myAlertAsync("アプリ本体が閉じられました。このタブを閉じてください。");
+        window.close();
+      }
+    });
+  }
 });
 onUnmounted(async () => {
   clearInterval(intervalID);

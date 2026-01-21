@@ -133,3 +133,9 @@ export async function vSaveDialog(_defaultName: string): Promise<string> {
 export function vTerminate() {
   fetchVueRunner({ cmd: "terminate" });
 }
+
+export function vListenToServer(handler: (event: MessageEvent) => void): void {
+  const url = document.location.origin + "/@vueRunner/event?id=" + vueRunnerId;
+  const evtSource = new EventSource(url);
+  evtSource.onmessage = handler;
+}

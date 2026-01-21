@@ -70,7 +70,6 @@
 		E403568328CF6A3D008E2C46 /* QuartzCore.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = QuartzCore.framework; path = /System/Library/Frameworks/QuartzCore.framework; sourceTree = "<absolute>"; };
 		E420BDF71885749000A2B983 /* MyApp.cpp */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.cpp.cpp; path = MyApp.cpp; sourceTree = "<group>"; wrapsLines = 1; };
 		E420BDF81885749000A2B983 /* MyApp.h */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.h; path = MyApp.h; sourceTree = "<group>"; };
-		E4236AE82F02437D002D55C5 /* httplib.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = httplib.h; sourceTree = "<group>"; };
 		E4236B272F04015C002D55C5 /* nlohmann */ = {isa = PBXFileReference; lastKnownFileType = folder; path = nlohmann; sourceTree = "<group>"; };
 		E4236B292F049AAE002D55C5 /* ja.lproj */ = {isa = PBXFileReference; lastKnownFileType = folder; name = ja.lproj; path = ../Resources/ja.lproj; sourceTree = "<group>"; };
 		E445FA592F192466004CB2C2 /* mongoose.c */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.c; path = mongoose.c; sourceTree = "<group>"; };
@@ -211,7 +210,6 @@
 				E45328172F002767006BB098 /* MyFrame.h */,
 				E420BDF71885749000A2B983 /* MyApp.cpp */,
 				E420BDF81885749000A2B983 /* MyApp.h */,
-				E4236AE82F02437D002D55C5 /* httplib.h */,
 				E4236B272F04015C002D55C5 /* nlohmann */,
 			);
 			name = wxSources;

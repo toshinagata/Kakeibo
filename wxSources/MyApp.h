@@ -22,7 +22,6 @@ class MyApp : public wxApp
   wxProcess *m_process;
 public:
   int m_port;
-  wxString m_randomId;
   
   wxDECLARE_EVENT_TABLE();
 };

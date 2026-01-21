@@ -4,7 +4,6 @@ import MainWindow from './components/MainWindow.vue'
 import { type } from '@tauri-apps/plugin-os';
 import { getName, getVersion } from '@tauri-apps/api/app';
 import { Menu, Submenu, PredefinedMenuItem } from '@tauri-apps/api/menu';
-import { vTerminate } from "./vueRunner.ts";
 import { isTauriAvailable, isVueRunnerAvailable } from "./utils.ts";
 
 /*  アプリケーションメニューを作成  */
@@ -38,22 +37,12 @@ async function createAppMenu() {
   await appMenu.setAsAppMenu();
 }
 
-/*  wxVueRunner上で動いているとき、App がアンロードされたら wxVueRunner を終了する  */
-async function unloadHandler() {
-  if (await isVueRunnerAvailable()) {
-    vTerminate();
-  }
-}
-
 onMounted(async () => {
   if (isTauriAvailable()) {
     const osType = type();
     if (osType === "macos") {
       createAppMenu();
     }
-  }
-  if (await isVueRunnerAvailable()) {
-    window.onbeforeunload = unloadHandler;
   }
 })
 </script>

@@ -24,7 +24,6 @@
 #include <thread>
 #include <atomic>
 
-//#include "httplib.h"
 #include <nlohmann/json.hpp>
 
 using json = nlohmann::json;
@@ -33,6 +32,9 @@ using json = nlohmann::json;
 std::atomic<int> server_status(0);
 
 static std::thread *server_thread = nullptr;
+
+static char sRandomId[16] = {0};
+static char sCookie[16] = {0};
 
 struct mg_mgr mgr;
 
@@ -53,7 +55,7 @@ handlePost(struct mg_connection *c, json &j)
   //  explicitly specify the encoding; *wxConvFileName for filenames, and
   //  wxConvUTF8 for other strings.
   
-  if (j["id"] != wxGetApp().m_randomId.ToStdString()) {
+  if (j["id"] != sRandomId) {
     mg_http_reply(c, 401, "", "");  /*  Unauthorized  */
     return;
   }
@@ -146,27 +148,78 @@ handlePost(struct mg_connection *c, json &j)
       ret = "[]";
     }
   } else if (cmd == "terminate") {
-    server_status = 2;  //  terminate is requested by the client
+    server_status = 10;  //  terminate is requested by the client
   }
   type = "Content-Type: " + type + "\r\n";
   mg_http_reply(c, 200, type.c_str(), "%s", ret.c_str());
 }
 
 static struct mg_http_serve_opts sServeOpts;
+static signed long sSSEConnectionId = -1;
+
+static int
+checkCookie(struct mg_http_message *hm)
+{
+  int i;
+  for (i = 0; i < MG_MAX_HTTP_HEADERS; i++) {
+    struct mg_http_header *hd = hm->headers + i;
+    if (hd->name.buf == NULL)
+      return 0;
+    if (mg_match(hd->name, mg_str("Cookie"), NULL)) {
+      if (strncmp(hd->value.buf, "token=", 6) == 0 &&
+          strncmp(hd->value.buf + 6, sCookie, 15) == 0 &&
+          hd->value.len == 21) {
+        return 1;
+      }
+    }
+  }
+  return 0;
+}
 
 static void
 eventHandler(struct mg_connection *c, int ev, void *ev_data)
 {
   if (ev == MG_EV_HTTP_MSG) {  // New HTTP request received
     struct mg_http_message *hm = (struct mg_http_message *) ev_data;  // Parsed HTTP request
-    if (mg_match(hm->uri, mg_str("/@vueRunner/"), NULL)) {
-      if (strncmp(hm->method.buf, "POST", hm->method.len) != 0) {
-        mg_http_reply(c, 405, "", "");  /*  Method not allowed  */
+    if (mg_match(hm->uri, mg_str("/@vueRunner/event"), NULL)) {
+      if (strncmp(hm->method.buf, "GET", hm->method.len) == 0) {
+        if (checkCookie(hm) && hm->query.len == strlen(sRandomId) + 3 && strncmp(hm->query.buf, "id=", 3) == 0 && strncmp(hm->query.buf + 3, sRandomId, strlen(sRandomId)) == 0) {
+          /*  Start SSE connection  */
+          mg_printf(c, "HTTP/1.1 200 OK\r\n"
+                    "Connection: keep-alive\r\n"
+                    "Content-Type: text/event-stream\r\n"
+                    "Cache-Control: no-cache\r\n\r\n");
+          sSSEConnectionId = (signed long)c->id;
+          c->is_resp = 0;
+        } else {
+          mg_http_reply(c, 401, "", "");  /*  Unauthorized  */
+        }
       } else {
-        json j = json::parse(hm->body.buf);
-        handlePost(c, j);
+        mg_http_reply(c, 405, "", "");  /*  Method not allowed  */
+      }
+    } else if (mg_match(hm->uri, mg_str("/@vueRunner/"), NULL)) {
+      if (strncmp(hm->method.buf, "POST", hm->method.len) == 0) {
+        if (checkCookie(hm)) {
+          json j = json::parse(hm->body.buf);
+          handlePost(c, j);
+        } else {
+          mg_http_reply(c, 401, "", "");  /*  Unauthorized  */
+        }
+      } else {
+        mg_http_reply(c, 405, "", "");  /*  Method not allowed  */
       }
     } else {
+      if (sCookie[0] == 0) {
+        //  First invocation: set cookie
+        char setCookie[36];
+        mg_random_str(sCookie, 16);  //  sCookie+18: token content
+        snprintf(setCookie, sizeof(setCookie), "Set-Cookie: token=%s\r\n", sCookie);
+        sServeOpts.extra_headers = strdup(setCookie);
+      } else {
+        if (sServeOpts.extra_headers != NULL)
+          free((void *)sServeOpts.extra_headers);
+        sServeOpts.extra_headers = NULL;
+      }
       mg_http_serve_dir(c, hm, &sServeOpts);  // For all other URLs, Serve static files
     }
   }
@@ -175,17 +228,40 @@ eventHandler(struct mg_connection *c, int ev, void *ev_data)
 void
 runServer(int port, std::string rootDir)
 {
+  uint64_t last_ms = 0;
   std::string server_url = "http://127.0.0.1:" + std::to_string(port);
+  mg_log_set(MG_LL_ERROR);
   mg_mgr_init(&mgr);  // Initialise event manager
   memset(&sServeOpts, 0, sizeof(sServeOpts));
   sServeOpts.root_dir = strdup(rootDir.c_str());
   sServeOpts.fs = &mg_fs_posix;
   server_status = 1;
   mg_http_listen(&mgr, server_url.c_str(), eventHandler, NULL);
-  while (server_status == 1) {
+  while (server_status < 10) {
+    if (sSSEConnectionId >= 0) {
+      mg_connection *c = mgr.conns;
+      while (c != NULL) {
+        if (c->id == (unsigned long)sSSEConnectionId)
+          break;
+        c = c->next;
+      }
+      if (c != NULL) {
+        if (server_status == 2) {
+          //  Server will terminate: notify the client
+          mg_printf(c, "data: stop\n\n");
+          c->is_resp = 0;
+          server_status = 10;
+        } else if (mg_millis() > last_ms + 1000) {
+          //  Periodically send dummy response
+          mg_printf(c, "data: \n\n");
+          c->is_resp = 0;
+          last_ms = mg_millis();
+        }
+      }
+    }
     mg_mgr_poll(&mgr, 1000);  // Infinite event loop
   }
-  server_status = 3;  //  End of server thread
+  server_status = 20;  //  End of server thread
 }
 
 void
@@ -305,24 +381,8 @@ MyApp::OnInit()
     m_port = port;
   }
   //  Create random id.
-  {
-    char s[16];
-    mg_random_str(s, sizeof(s));
-/*    std::mt19937 mt{ std::random_device{}() };
-    std::uniform_int_distribution<int> dist(0, 61);
-    for (int i = 0; i < 15; i++) {
-      int r = dist(mt);
-      if (r < 26) {
-        s[i] = 'A' + r;
-      } else if (r < 52) {
-        s[i] = 'a' + (r - 26);
-      } else {
-        s[i] = '0' + r - 52;
-      }
-    }
-    s[15] = 0; */
-    m_randomId = wxString(s);
-  }
+  mg_random_str(sRandomId, sizeof(sRandomId));
+
   //  Determine the root directory.
   wxString distDir = wxStandardPaths::Get().GetResourcesDir() + wxT("/dist");
   
@@ -332,7 +392,7 @@ MyApp::OnInit()
   //  Run the browser
   //  TODO: Use wxWebView in the current process
   wxString urlStr;
-  urlStr.Printf("http://127.0.0.1:%d/?id=%s", port, m_randomId.utf8_str());
+  urlStr.Printf("http://127.0.0.1:%d/?id=%s", port, sRandomId);
 
   //  Wait until the port is available
   {
@@ -372,7 +432,6 @@ MyApp::OnInit()
           browser = "Safari";
         } else {
           wxMessageBox("Safari (15以上), Firefox (115以上) または Chrome (116以上) をインストールしてください。", "ブラウザのバージョン", wxOK);
-          terminateServer();
           wxExit();
         }
       }
