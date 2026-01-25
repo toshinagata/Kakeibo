@@ -126,8 +126,34 @@ export async function vReadDir(path: string): Promise<string[]> {
   }
 }
 
-export async function vSaveDialog(_defaultName: string): Promise<string> {
-  return "";
+export async function vSaveDialog(options?: object): Promise<string> {
+  const res = await fetchVueRunner({ cmd: "saveDialog", options: options });
+  //  res は event-stream
+  const reader = res.body?.getReader();
+  const decoder = new TextDecoder();
+  return new Promise<string>(async (resolve, reject) => {
+    if (reader !== undefined) {
+      while (true) {
+        const {done, value} = await reader.read();
+        console.log(`vSaveDialog: done=${done}, value=${value}\n`);
+        if (done)
+          break;
+        if (!value)
+          continue;
+        const lines = decoder.decode(value);
+        let [ type, text ] = lines.split(": ");
+        if (type === "data") {
+          //  text may be an empty string (the save dialog was canceled)
+          text = text.trim();
+          console.log(`vSaveDialog: resolve(${text})\n`);
+          resolve(text);
+          return;
+        }
+      }
+    }
+    reject();
+    return;
+  });
 }
 
 export function vTerminate() {

@@ -455,6 +455,7 @@ async function fileSelected() {
     if (file !== undefined) {
       await methods.importCSV(file);
     }
+    fileInput.value.value = "";
   }
 }
 

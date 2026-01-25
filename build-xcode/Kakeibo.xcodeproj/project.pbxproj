@@ -32,6 +32,8 @@
 		E453281A2F002767006BB098 /* MyFrame.cpp in Sources */ = {isa = PBXBuildFile; fileRef = E45328152F002767006BB098 /* MyFrame.cpp */; };
 		E453281C2F002767006BB098 /* MyApp.iss in Resources */ = {isa = PBXBuildFile; fileRef = E45328162F002767006BB098 /* MyApp.iss */; };
 		E4589CF528D82A5200F55785 /* Carbon.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = E4FC7845183E51180064FB2E /* Carbon.framework */; };
+		E4ACCACA2F239D2400F13A5A /* MyWebFrame.cpp in Sources */ = {isa = PBXBuildFile; fileRef = E4ACCAC82F239D2400F13A5A /* MyWebFrame.cpp */; };
+		E4ACCACC2F23BBF600F13A5A /* MyWebFrameExtraMac.mm in Sources */ = {isa = PBXBuildFile; fileRef = E4ACCACB2F23BBF600F13A5A /* MyWebFrameExtraMac.mm */; };
 		E4BB56752F09FAF4005F7388 /* dist in Resources */ = {isa = PBXBuildFile; fileRef = E4BB56742F09FAF4005F7388 /* dist */; };
 		E4BB56772F0A00AA005F7388 /* icon.icns in Resources */ = {isa = PBXBuildFile; fileRef = E4BB56762F0A00AA005F7388 /* icon.icns */; };
 		E4FC7811183E50DC0064FB2E /* Accelerate.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = E4FC7810183E50DC0064FB2E /* Accelerate.framework */; };
@@ -79,6 +81,9 @@
 		E45328162F002767006BB098 /* MyApp.iss */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = text; path = MyApp.iss; sourceTree = "<group>"; };
 		E45328172F002767006BB098 /* MyFrame.h */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.h; path = MyFrame.h; sourceTree = "<group>"; };
 		E460B2DC2739716500CD9407 /* Version */ = {isa = PBXFileReference; lastKnownFileType = text; name = Version; path = ../Version; sourceTree = "<group>"; };
+		E4ACCAC82F239D2400F13A5A /* MyWebFrame.cpp */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.cpp.cpp; path = MyWebFrame.cpp; sourceTree = "<group>"; };
+		E4ACCAC92F239D2400F13A5A /* MyWebFrame.h */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.h; path = MyWebFrame.h; sourceTree = "<group>"; };
+		E4ACCACB2F23BBF600F13A5A /* MyWebFrameExtraMac.mm */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.cpp.objcpp; path = MyWebFrameExtraMac.mm; sourceTree = "<group>"; };
 		E4B456272F00E21D00B133B8 /* Makefile */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.make; name = Makefile; path = ../Makefile; sourceTree = "<group>"; usesTabs = 1; };
 		E4BB56742F09FAF4005F7388 /* dist */ = {isa = PBXFileReference; lastKnownFileType = folder; name = dist; path = "../Tauri-Vue/dist"; sourceTree = "<group>"; };
 		E4BB56762F0A00AA005F7388 /* icon.icns */ = {isa = PBXFileReference; lastKnownFileType = image.icns; name = icon.icns; path = ../Resources/icon.icns; sourceTree = "<group>"; };
@@ -208,6 +213,9 @@
 				E45328142F002767006BB098 /* MyApp.rc */,
 				E45328152F002767006BB098 /* MyFrame.cpp */,
 				E45328172F002767006BB098 /* MyFrame.h */,
+				E4ACCAC82F239D2400F13A5A /* MyWebFrame.cpp */,
+				E4ACCAC92F239D2400F13A5A /* MyWebFrame.h */,
+				E4ACCACB2F23BBF600F13A5A /* MyWebFrameExtraMac.mm */,
 				E420BDF71885749000A2B983 /* MyApp.cpp */,
 				E420BDF81885749000A2B983 /* MyApp.h */,
 				E4236B272F04015C002D55C5 /* nlohmann */,
@@ -357,6 +365,8 @@
 				E4FC7CA6183F94D30064FB2E /* buildInfo.c in Sources */,
 				E453281A2F002767006BB098 /* MyFrame.cpp in Sources */,
 				E445FA5B2F192467004CB2C2 /* mongoose.c in Sources */,
+				E4ACCACC2F23BBF600F13A5A /* MyWebFrameExtraMac.mm in Sources */,
+				E4ACCACA2F239D2400F13A5A /* MyWebFrame.cpp in Sources */,
 				E420BDFF1885749000A2B983 /* MyApp.cpp in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
@@ -403,6 +413,7 @@
 					"$(PROJECT_DIR)/../wxSources",
 				);
 				INFOPLIST_FILE = Info.plist;
+				INFOPLIST_KEY_CFBundleDisplayName = Kakeibo;
 				INSTALL_PATH = "$(HOME)/Applications";
 				LIBRARY_SEARCH_PATHS = "$(PROJECT_DIR)/../../wxWidgets-3.2.5/build-osx/lib";
 				MACOSX_DEPLOYMENT_TARGET = 10.12;
@@ -453,6 +464,7 @@
 					"$(PROJECT_DIR)/../wxSources",
 				);
 				INFOPLIST_FILE = Info.plist;
+				INFOPLIST_KEY_CFBundleDisplayName = Kakeibo;
 				INSTALL_PATH = "$(HOME)/Applications";
 				LIBRARY_SEARCH_PATHS = "$(PROJECT_DIR)/../../wxWidgets-3.2.5/build-osx/lib";
 				MACOSX_DEPLOYMENT_TARGET = 10.12;

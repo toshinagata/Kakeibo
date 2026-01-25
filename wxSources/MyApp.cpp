@@ -19,10 +19,13 @@
 
 #include "MyApp.h"
 #include "MyFrame.h"
+#include "MyWebFrame.h"
 
 #include "mongoose.h"
 #include <thread>
 #include <atomic>
+#include <queue>
+#include <mutex>
 
 #include <nlohmann/json.hpp>
 
@@ -30,6 +33,14 @@ using json = nlohmann::json;
 
 //  Shared variable to show the server status
 std::atomic<int> server_status(0);
+enum {
+  eServer_Idle = 0,
+  eServer_Running = 1,
+  eServer_StopFromServer = 2,
+  eServer_StopFromClient = 10,
+  eServer_Stopping = 20,
+  eServer_Terminated = 30
+};
 
 static std::thread *server_thread = nullptr;
 
@@ -38,7 +49,24 @@ static char sCookie[16] = {0};
 
 struct mg_mgr mgr;
 
-//static httplib::Server *svr = nullptr;
+//  Custom event for notifying the main thread from the server thread
+const wxEventType MyEvent = wxNewEventType();
+enum {
+  eMyEvent_SaveDialog = 1,
+};
+
+//  HTTP response for Server Sent Events (SSE)
+const char *sSSEResponse = "HTTP/1.1 200 OK\r\n"
+          "Connection: keep-alive\r\n"
+          "Content-Type: text/event-stream\r\n"
+          "Cache-Control: no-cache\r\n"
+          "\r\n";
+
+//  Queue for sending SSE results
+std::queue<std::pair<unsigned long, std::string>> sSSEResults;
+
+//  Mutex for thread-safe access to the queue
+std::mutex sMutex;
 
 void
 handlePost(struct mg_connection *c, json &j)
@@ -147,8 +175,16 @@ handlePost(struct mg_connection *c, json &j)
     } else {
       ret = "[]";
     }
+  } else if (cmd == "saveDialog") {
+    j["connection_id"] = c->id;
+    wxCommandEvent *anEvent = new wxCommandEvent(MyEvent);
+    anEvent->SetClientData(strdup(j.dump().c_str()));
+    wxGetApp().QueueEvent(anEvent);
+    mg_printf(c, sSSEResponse);
+    c->is_resp = 0;
+    return;  //  Early return: no standard http reply
   } else if (cmd == "terminate") {
-    server_status = 10;  //  terminate is requested by the client
+    server_status = eServer_StopFromClient;  //  terminate is requested by the client
   }
   type = "Content-Type: " + type + "\r\n";
   mg_http_reply(c, 200, type.c_str(), "%s", ret.c_str());
@@ -183,16 +219,18 @@ eventHandler(struct mg_connection *c, int ev, void *ev_data)
     struct mg_http_message *hm = (struct mg_http_message *) ev_data;  // Parsed HTTP request
     if (mg_match(hm->uri, mg_str("/@vueRunner/event"), NULL)) {
       if (strncmp(hm->method.buf, "GET", hm->method.len) == 0) {
-        if (checkCookie(hm) && hm->query.len == strlen(sRandomId) + 3 && strncmp(hm->query.buf, "id=", 3) == 0 && strncmp(hm->query.buf + 3, sRandomId, strlen(sRandomId)) == 0) {
-          /*  Start SSE connection  */
-          mg_printf(c, "HTTP/1.1 200 OK\r\n"
-                    "Connection: keep-alive\r\n"
-                    "Content-Type: text/event-stream\r\n"
-                    "Cache-Control: no-cache\r\n\r\n");
-          sSSEConnectionId = (signed long)c->id;
-          c->is_resp = 0;
+        bool useWebView = wxGetApp().m_useWebView;
+        if (useWebView) {
+          mg_http_reply(c, 404, "", "");  /*  Do not use SSE  */
         } else {
-          mg_http_reply(c, 401, "", "");  /*  Unauthorized  */
+          if (checkCookie(hm) && hm->query.len == strlen(sRandomId) + 3 && strncmp(hm->query.buf, "id=", 3) == 0 && strncmp(hm->query.buf + 3, sRandomId, strlen(sRandomId)) == 0) {
+            /*  Start SSE connection  */
+            mg_printf(c, sSSEResponse);
+            sSSEConnectionId = (signed long)c->id;
+            c->is_resp = 0;
+          } else {
+            mg_http_reply(c, 401, "", "");  /*  Unauthorized  */
+          }
         }
       } else {
         mg_http_reply(c, 405, "", "");  /*  Method not allowed  */
@@ -235,47 +273,48 @@ runServer(int port, std::string rootDir)
   memset(&sServeOpts, 0, sizeof(sServeOpts));
   sServeOpts.root_dir = strdup(rootDir.c_str());
   sServeOpts.fs = &mg_fs_posix;
-  server_status = 1;
+  server_status = eServer_Running;
   mg_http_listen(&mgr, server_url.c_str(), eventHandler, NULL);
-  while (server_status < 10) {
-    if (sSSEConnectionId >= 0) {
+  while (server_status < eServer_StopFromClient) {
+    //  If the application is going to exit, then notify client to stop
+    if (server_status == eServer_StopFromServer && sSSEConnectionId >= 0) {
+      std::lock_guard<std::mutex> lock(sMutex);
+      sSSEResults.push(std::make_pair(sSSEConnectionId, "stop"));
+      server_status = eServer_Stopping;  //  The polling loop will terminate next
+    }
+    //  If data is present in sSSEResults, then send it (and close the connection)
+    while (1) {
+      std::pair<unsigned long, std::string> pair;
+      {
+        std::lock_guard<std::mutex> lock(sMutex);
+        if (sSSEResults.empty())
+          break;
+        pair = std::move(sSSEResults.front());
+        sSSEResults.pop();
+      }
       mg_connection *c = mgr.conns;
       while (c != NULL) {
-        if (c->id == (unsigned long)sSSEConnectionId)
+        if (c->id == pair.first)
           break;
         c = c->next;
       }
       if (c != NULL) {
-        if (server_status == 2) {
-          //  Server will terminate: notify the client
-          mg_printf(c, "data: stop\n\n");
-          c->is_resp = 0;
-          server_status = 10;
-        } else if (mg_millis() > last_ms + 1000) {
-          //  Periodically send dummy response
-          mg_printf(c, "data: \n\n");
-          c->is_resp = 0;
-          last_ms = mg_millis();
-        }
+        mg_printf(c, "data: %s\n\n", pair.second.c_str());
+        c->is_draining = 1;
       }
     }
     mg_mgr_poll(&mgr, 1000);  // Infinite event loop
   }
-  server_status = 20;  //  End of server thread
+  server_status = eServer_Terminated;  //  End of server thread
 }
 
 void
-terminateServer()
+terminateServer(bool useWebView)
 {
   //  Tell the server thread to terminate
-  server_status = 2;
-/*  wxString urlStr = wxString::Format(wxT("http://127.0.0.1:%d"), wxGetApp().m_port);
-  httplib::Client cli(urlStr.utf8_string());
-  httplib::Headers headers = {};
-  std::string body = "{\"id\":\"" + wxGetApp().m_randomId.ToStdString() + "\"}";
-  //  Post terminate command
-  auto res = cli.Post("/@vueRunner/terminate", headers, body, "application/json");
- */
+  //  If we use web view, then stop the server immediately. Otherwise, tell client
+  //  to close the window and then stop the server.
+  server_status = (useWebView ? eServer_Stopping : eServer_StopFromServer);
 }
 
 FILE *fp = NULL;
@@ -297,6 +336,64 @@ writeLog(wxString str)
 #else
 #define write_log(s)
 #endif
+
+static int
+findAvailablePort(bool useWebView)
+{
+  int port = (useWebView ? 3001 : 8081);
+  wxIPV4address addr;
+  wxSocketClient *sock = new wxSocketClient();
+  sock->SetTimeout(1);
+  addr.Hostname("127.0.0.1");
+  while (1) {
+    addr.Service(port);
+    printf("Trying to connect to 127.0.0.1:%d...\n", port);
+    write_log(wxString::Format(wxT("Trying to connect to 127.0.0.1:%d..."), port));
+    if (sock->Connect(addr, true)) {
+      sock->Close();
+      port += 1;
+      continue;
+    }
+    printf("Looks like port %d is not in use.\n", port);
+    write_log(wxString::Format(wxT("Looks like port %d is not in use."), port));
+    break;
+  }
+  sock->Destroy();
+  return port;
+}
+
+static void
+waitForPort(int port)
+{
+  wxIPV4address addr;
+  wxSocketClient *sock = new wxSocketClient();
+  sock->SetTimeout(10);
+  addr.Hostname("127.0.0.1");
+  addr.Service(port);
+  while (1) {
+    if (sock->Connect(addr, true)) {
+      sock->Close();
+      break;
+    }
+  }
+  sock->Destroy();
+}
+
+static bool
+shouldUseWebView(void)
+{
+  int major;
+  wxGetOsVersion(&major, NULL, NULL);
+  
+#if defined(__WXMAC__)
+  if (major >= 11)
+    return true;
+  else
+    return false;
+#else
+  return false;
+#endif
+}
 
 #if defined(__WXMAC__)
 void
@@ -350,6 +447,7 @@ GetVersionNumbersFromInfoPlist(wxString path, int &major, int &minor)
 
 wxBEGIN_EVENT_TABLE(MyApp, wxApp)
   EVT_IDLE(MyApp::OnIdle)
+  EVT_COMMAND(wxID_ANY, MyEvent, MyApp::OnCustomEvent)
 wxEND_EVENT_TABLE()
 
 bool
@@ -358,28 +456,12 @@ MyApp::OnInit()
   //  Disable any wxLog functionality (otherwise ::exit() may crash)
   wxLog::EnableLogging(false);
 
+  //  Determine whether we use wxWebView or not
+  m_useWebView = shouldUseWebView();
+
   //  Examine which port is open
-  int port = 8081;
-  {
-    wxIPV4address addr;
-    wxSocketClient *sock = new wxSocketClient();
-    sock->SetTimeout(1);
-    addr.Hostname("127.0.0.1");
-    while (1) {
-      addr.Service(port);
-      printf("Trying to connect to 127.0.0.1:%d...\n", port);
-      write_log(wxString::Format(wxT("Trying to connect to 127.0.0.1:%d..."), port));
-      if (sock->Connect(addr, true)) {
-        sock->Close();
-        port += 1;
-        continue;
-      }
-      printf("Looks like port %d is not in use.\n", port);
-      write_log(wxString::Format(wxT("Looks like port %d is not in use."), port));
-      break;
-    }
-    m_port = port;
-  }
+  m_port = findAvailablePort(m_useWebView);
+
   //  Create random id.
   mg_random_str(sRandomId, sizeof(sRandomId));
 
@@ -387,30 +469,27 @@ MyApp::OnInit()
   wxString distDir = wxStandardPaths::Get().GetResourcesDir() + wxT("/dist");
   
   //  Run the server in a separate thread.
-  server_thread = new std::thread(runServer, port, distDir.utf8_string());
+  server_thread = new std::thread(runServer, m_port, distDir.utf8_string());
   
-  //  Run the browser
-  //  TODO: Use wxWebView in the current process
+  //  Run the browser or wxWebView
   wxString urlStr;
-  urlStr.Printf("http://127.0.0.1:%d/?id=%s", port, sRandomId);
+  urlStr.Printf("http://127.0.0.1:%d/?id=%s", m_port, sRandomId);
 
   //  Wait until the port is available
-  {
-    wxIPV4address addr;
-    wxSocketClient *sock = new wxSocketClient();
-    sock->SetTimeout(10);
-    addr.Hostname("127.0.0.1");
-    addr.Service(port);
-    while (1) {
-      if (sock->Connect(addr, true)) {
-        sock->Close();
-        break;
-      }
-    }
-  }
+  waitForPort(m_port);
 
+  if (m_useWebView) {
+    m_frame = nullptr;
+    m_webFrame = new MyWebFrame(urlStr);
+    return true;
+  }
+  
+  m_useWebView = false;
+  
   wxString invoke;
   wxString browser;
+
+  m_webFrame = nullptr;
 
 #if defined(__WXMAC__)
   //  Check the Safari version. If less than 15, then avoid it
@@ -446,23 +525,54 @@ MyApp::OnInit()
 #endif
   
   m_frame = new MyFrame;
-  m_frame->SetText(wxString::Format(browser + wxT("上, 127.0.0.1:%d\n で動作しています。"), port));
+  m_frame->SetText(wxString::Format(browser + wxT("上, 127.0.0.1:%d\n で動作しています。"), m_port));
   m_frame->Show();
 
   return true;
 }
 
-int
-MyApp::OnExit()
+void
+MyApp::OnCustomEvent(wxCommandEvent &event)
 {
-  if (server_status <= 1) {
-    terminateServer();
+  void *d = event.GetClientData();
+  json j = json::parse((const char *)d);
+  free(d);  //  d must have been allocated by strdup()
+  std::string cmd = j["cmd"];
+  unsigned long id = j["connection_id"];
+  if (cmd == "saveDialog") {
+    json options = j["options"];
+    std::string defaultPath = "";
+    std::string title = "Save File";
+    std::string dir = "";
+    std::string wildcard = "*.*";
+    std::string result = "";
+    if (options.contains("defaultPath")) {
+      defaultPath = options["defaultPath"];
+    }
+    if (options.contains("title")) {
+      title = options["title"];
+    }
+    if (options.contains("directory")) {
+      dir = options["directory"];
+    }
+    if (options.contains("wildcard")) {
+      wildcard = options["wildcard"];
+    }
+    wxFileDialog dialog(NULL,
+                        wxString::FromUTF8(title.c_str()),
+                        wxString::FromUTF8(dir.c_str()),
+                        wxString::FromUTF8(defaultPath.c_str()),
+                        wxString::FromUTF8(wildcard.c_str()),
+                        wxFD_SAVE | wxFD_OVERWRITE_PROMPT | wxFD_CHANGE_DIR);
+    if (dialog.ShowModal() == wxID_OK) {
+      result = (const char *)(dialog.GetPath().mb_str(wxConvFile));
+    }
+    {  //  Push the result to the queue
+      std::lock_guard<std::mutex> lock(sMutex);
+      sSSEResults.push(std::make_pair(id, result));
+    }
   }
-  if (server_thread->joinable())
-    server_thread->join();
-  return wxApp::OnExit();
 }
-wxIMPLEMENT_APP(MyApp);
 
 void
 MyApp::OnIdle(wxIdleEvent &WXUNUSED(event))
@@ -471,3 +581,16 @@ MyApp::OnIdle(wxIdleEvent &WXUNUSED(event))
     wxExit();
   }
 }
+
+int
+MyApp::OnExit()
+{
+  if (server_status <= eServer_Running) {
+    terminateServer(m_useWebView);
+  }
+  if (server_thread->joinable())
+    server_thread->join();
+  return wxApp::OnExit();
+}
+wxIMPLEMENT_APP(MyApp);
+

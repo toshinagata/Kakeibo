@@ -30,7 +30,7 @@ import { homeDir, join } from "@tauri-apps/api/path";
 import { mkdir, exists, create, rename, remove, readTextFile, writeTextFile, readDir }
   from "@tauri-apps/plugin-fs";
 import { save } from "@tauri-apps/plugin-dialog";
-import { vHomeDir, vJoin, vMkdir, vExists, vCreate, vRename, vRemove, vReadTextFile, vWriteTextFile, vReadDir, vTerminate, vListenToServer }
+import { vHomeDir, vJoin, vMkdir, vExists, vCreate, vRename, vRemove, vReadTextFile, vWriteTextFile, vReadDir, vSaveDialog, vTerminate, vListenToServer }
   from "../vueRunner.ts";
 
 /*  テスト用データ（デバッグ用）  */
@@ -97,6 +97,7 @@ const methods: DataMethods = {
   importCSV: async (file: File) => {
     let stage = 0;
     try {
+      console.log("import csv from " + file);
       const content = await file.text();
       stage = 1;
       const result = readDataFromString(content);
@@ -144,9 +145,18 @@ const methods: DataMethods = {
         if (path) {
           await writeTextFile(path, csv);
         }
+      } else if (await isVueRunnerAvailable() && Number(document.location.port) < 8000) {
+        //  vueRunner が 3000 番台のポートを使用：WebView で動作している
+        action = "書き出し";
+        const path = await vSaveDialog({ defaultPath: 'kakeibo.csv' });
+        if (path) {
+          await vWriteTextFile(path, csv);
+        } else {
+          await myAlertAsync("ファイルの" + action + "をキャンセルしました。");
+        }
       } else {
         action = "ダウンロード";
-        const blob = new Blob([csv], { type: 'application/csv'});
+        const blob = new Blob([csv], { type: 'text/csv'});
         const url = URL.createObjectURL(blob);
         const a = Object.assign(document.createElement('a'), {
           href: url,
