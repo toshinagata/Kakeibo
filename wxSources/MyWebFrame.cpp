@@ -22,7 +22,7 @@ MyWebFrame::MyWebFrame(wxString &urlString)
   Bind(wxEVT_CLOSE_WINDOW, &MyWebFrame::OnClose, this);
 
 #if defined(__WXMSW__)
-  this->SetBackgroundColour(*wxWHITE);
+
 #endif
   
 #if defined(__WXMAC__)
@@ -33,8 +33,10 @@ MyWebFrame::MyWebFrame(wxString &urlString)
   SetMenuBar(menuBar);
   Bind(wxEVT_MENU, [this](wxCommandEvent&) { Close(true); }, wxID_EXIT);
 #endif
-  
+
+#if defined(__WXMAC__)
   EnableDeveloperModeInWebView(m_webview);
+#endif
   
   this->Show();
   m_webview->LoadURL(urlString);  

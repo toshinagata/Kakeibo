@@ -390,6 +390,11 @@ shouldUseWebView(void)
     return true;
   else
     return false;
+#elif defined(__WXMSW__)
+  if (wxWebView::IsBackendAvailable(wxWebViewBackendEdge))
+    return true;
+  else
+    return false;
 #else
   return false;
 #endif

@@ -22,7 +22,7 @@ WX_VER = 3.2
 APPNAME = $(shell echo $${PRODUCT_NAME:-wxVueRunner})
 
 #  Object files
-OBJECTS = MyApp.o MyFrame.o mongoose.o
+OBJECTS = MyApp.o MyFrame.o MyWebFrame.o mongoose.o
 
 
 #  wx libraries
@@ -82,12 +82,14 @@ ifeq ($(TARGET_PLATFORM),MSW)
    TOOL_PREFIX = i686-w64-mingw32-
    LIB_SUFFIX = -$(WX_VER)-i686-w64-mingw32
    HOST_CC = "gcc -m32"
+   WEBVIEW_LIB = $(WX_DIR)/3rdparty/webview2/build/native/x86/WebView2Loader.dll
   else
    ifeq ($(TARGET_ARCH),x86_64)
     BUILD_DIR = build-win
     TOOL_PREFIX = x86_64-w64-mingw32-
     LIB_SUFFIX = -$(WX_VER)-x86_64-w64-mingw32
     HOST_CC = "gcc"
+    WEBVIEW_LIB = $(WX_DIR)/3rdparty/webview2/build/native/x64/WebView2Loader.dll
    endif
   endif
   WINE_PATH="/Applications/Wine Stable.app/Contents/Resources/wine/bin"
@@ -95,7 +97,7 @@ ifeq ($(TARGET_PLATFORM),MSW)
  WX_LIB_DIR = $(WX_DIR)/$(BUILD_DIR)/lib
  WX_ARCH_DIR = $(WX_LIB_DIR)/wx/include/$(TOOL_PREFIX)msw-unicode-static-$(WX_VER)
  WX_CPPFLAGS = -I$(PWD)/../wxSources -isystem $(WX_ARCH_DIR) -isystem $(WX_DIR)/include -D_LARGEFILE_SOURCE=unknown -D__WXMSW__
- WX_LDFLAGS = -L$(WX_LIB_DIR) -Wl,--subsystem,windows -mwindows $(WX_LIB_DIR)/libwx_mswu_gl$(LIB_SUFFIX).a -lopengl32 -lglu32 $(WX_LIB_DIR)/libwx_mswu$(LIB_SUFFIX).a -lwxregexu$(LIB_SUFFIX) -lwxexpat$(LIB_SUFFIX) -lwxtiff$(LIB_SUFFIX) -lwxjpeg$(LIB_SUFFIX) -lwxpng$(LIB_SUFFIX) -lwxzlib$(LIB_SUFFIX) -lwxscintilla$(LIB_SUFFIX) -lrpcrt4 -loleaut32 -lole32 -luuid -luxtheme -lwinspool -lwinmm -lshell32 -lshlwapi -lcomctl32 -lcomdlg32 -ladvapi32 -lversion -lwsock32 -lgdi32 -loleacc -lwinhttp -limm32 -lws2_32
+ WX_LDFLAGS = -L$(WX_LIB_DIR) -Wl,--subsystem,windows -mwindows $(WX_LIB_DIR)/libwx_mswu_gl$(LIB_SUFFIX).a -lopengl32 -lglu32 $(WX_LIB_DIR)/libwx_mswu$(LIB_SUFFIX).a -lwxregexu$(LIB_SUFFIX) -lwxexpat$(LIB_SUFFIX) -lwxtiff$(LIB_SUFFIX) -lwxjpeg$(LIB_SUFFIX) -lwxpng$(LIB_SUFFIX) -lwxzlib$(LIB_SUFFIX) -lwxscintilla$(LIB_SUFFIX) -lrpcrt4 -loleaut32 -lole32 -luuid -luxtheme -lwinspool -lwinmm -lshell32 -lshlwapi -lcomctl32 -lcomdlg32 -ladvapi32 -lversion -lwsock32 -lgdi32 -loleacc -lwinhttp -limm32 -lws2_32 $(WEBVIEW_LIB)
  LD_EXTRA_FLAGS = -static
  EXECUTABLE = _$(APPNAME).exe_
  FINAL_EXECUTABLE = $(APPNAME).exe
@@ -247,6 +249,7 @@ ifeq ($(TARGET_PLATFORM),MSW)
 	rm -rf $(DESTPREFIX)/$(PRODUCT_DIR)
 	mkdir -p $(DESTPREFIX)/$(PRODUCT_DIR)
 	cp $(DESTPREFIX)/$(EXECUTABLE) $(DESTPREFIX)/$(PRODUCT_DIR)/$(FINAL_EXECUTABLE)
+	cp $(WEBVIEW_LIB) $(DESTPREFIX)/$(PRODUCT_DIR)
 	cp $(PWD)/../Resources/icon.ico $(DESTPREFIX)/$(PRODUCT_DIR)
 	cp -R $(PWD)/../Tauri-Vue/dist $(DESTPREFIX)/$(PRODUCT_DIR)
 endif

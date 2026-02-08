@@ -16,9 +16,11 @@ OutputDir = ..\_latest_binaries
 
 ; x86_64 files
 Source: "build\release\{#MyAppName}\{#MyAppName}.exe"; DestDir: {app}; Check: Is64BitInstallMode
+Source: "build\release\{#MyAppName}\WebView2Loader.dll"; DestDir: {app}; Check: Is64BitInstallMode
 
 ; i386 files (the first one should be marked 'solidbreak')
-Source: "..\build-win32\build\release\{#MyAppName}\{#MyAppName}.exe"; DestDir: {app}; Check: Is64BitInstallMode; Flags: solidbreak
+;Source: "..\build-win32\build\release\{#MyAppName}\{#MyAppName}.exe"; DestDir: {app}; Check: Is64BitInstallMode; Flags: solidbreak
+;Source: "..\build-win32\release\{#MyAppName}\WebView2Loader.dll"; DestDir: {app}; Check: Is64BitInstallMode
 
 [Icons]
 Name: "{group}\{#MyAppName}"; Filename: "{app}\{#MyAppName}.exe"
