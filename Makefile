@@ -244,20 +244,20 @@ $(DESTPREFIX)/$(EXECUTABLE) : $(DESTPREFIX) $(DESTOBJECTS) $(PWD)/../Version
 	$(CC) -c $(DESTPREFIX)/buildInfo.c -o $(DESTPREFIX)/buildInfo.o $(CFLAGS)
 	$(CPP) -o $@ $(DESTOBJECTS) $(DESTPREFIX)/buildInfo.o $(WIN_FOPEN_O) $(CFLAGS) $(LDFLAGS) $(LUAJIT_LDFLAGS)
 
-final_executable : $(DESTPREFIX)/$(EXECUTABLE) $(PWD)/../Tauri-Vue/dist
+final_executable : $(DESTPREFIX)/$(EXECUTABLE) $(PWD)/../Vue/dist
 ifeq ($(TARGET_PLATFORM),MSW)
 	rm -rf $(DESTPREFIX)/$(PRODUCT_DIR)
 	mkdir -p $(DESTPREFIX)/$(PRODUCT_DIR)
 	cp $(DESTPREFIX)/$(EXECUTABLE) $(DESTPREFIX)/$(PRODUCT_DIR)/$(FINAL_EXECUTABLE)
 	cp $(WEBVIEW_LIB) $(DESTPREFIX)/$(PRODUCT_DIR)
 	cp $(PWD)/../Resources/icon.ico $(DESTPREFIX)/$(PRODUCT_DIR)
-	cp -R $(PWD)/../Tauri-Vue/dist $(DESTPREFIX)/$(PRODUCT_DIR)
+	cp -R $(PWD)/../Vue/dist $(DESTPREFIX)/$(PRODUCT_DIR)
 endif
 ifeq ($(TARGET_PLATFORM),LINUX)
 	rm -rf $(DESTPREFIX)/$(PRODUCT_DIR)
 	mkdir -p $(DESTPREFIX)/$(PRODUCT_DIR)/lib
 	cp $(DESTPREFIX)/$(EXECUTABLE) $(DESTPREFIX)/$(PRODUCT_DIR)/$(FINAL_EXECUTABLE)
-	cp -R $(PWD)/../Tauri-Vue/dist $(DESTPREFIX)/$(PRODUCT_DIR)
+	cp -R $(PWD)/../Vue/dist $(DESTPREFIX)/$(PRODUCT_DIR)
 endif
 
 $(DESTPREFIX)/$(PRODUCT) : final_executable $(WEBVIEW_SO)

@@ -32,9 +32,9 @@
 		E453281A2F002767006BB098 /* MyFrame.cpp in Sources */ = {isa = PBXBuildFile; fileRef = E45328152F002767006BB098 /* MyFrame.cpp */; };
 		E453281C2F002767006BB098 /* MyApp.iss in Resources */ = {isa = PBXBuildFile; fileRef = E45328162F002767006BB098 /* MyApp.iss */; };
 		E4589CF528D82A5200F55785 /* Carbon.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = E4FC7845183E51180064FB2E /* Carbon.framework */; };
+		E4A7E3092F3B755E002755AF /* dist in Resources */ = {isa = PBXBuildFile; fileRef = E4BB56742F09FAF4005F7388 /* dist */; };
 		E4ACCACA2F239D2400F13A5A /* MyWebFrame.cpp in Sources */ = {isa = PBXBuildFile; fileRef = E4ACCAC82F239D2400F13A5A /* MyWebFrame.cpp */; };
 		E4ACCACC2F23BBF600F13A5A /* MyWebFrameExtraMac.mm in Sources */ = {isa = PBXBuildFile; fileRef = E4ACCACB2F23BBF600F13A5A /* MyWebFrameExtraMac.mm */; };
-		E4BB56752F09FAF4005F7388 /* dist in Resources */ = {isa = PBXBuildFile; fileRef = E4BB56742F09FAF4005F7388 /* dist */; };
 		E4BB56772F0A00AA005F7388 /* icon.icns in Resources */ = {isa = PBXBuildFile; fileRef = E4BB56762F0A00AA005F7388 /* icon.icns */; };
 		E4FC7811183E50DC0064FB2E /* Accelerate.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = E4FC7810183E50DC0064FB2E /* Accelerate.framework */; };
 		E4FC7838183E50F00064FB2E /* AGL.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = E4FC7837183E50F00064FB2E /* AGL.framework */; };
@@ -85,7 +85,7 @@
 		E4ACCAC92F239D2400F13A5A /* MyWebFrame.h */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.h; path = MyWebFrame.h; sourceTree = "<group>"; };
 		E4ACCACB2F23BBF600F13A5A /* MyWebFrameExtraMac.mm */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.cpp.objcpp; path = MyWebFrameExtraMac.mm; sourceTree = "<group>"; };
 		E4B456272F00E21D00B133B8 /* Makefile */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.make; name = Makefile; path = ../Makefile; sourceTree = "<group>"; usesTabs = 1; };
-		E4BB56742F09FAF4005F7388 /* dist */ = {isa = PBXFileReference; lastKnownFileType = folder; name = dist; path = "../Tauri-Vue/dist"; sourceTree = "<group>"; };
+		E4BB56742F09FAF4005F7388 /* dist */ = {isa = PBXFileReference; lastKnownFileType = folder; name = dist; path = ../Vue/dist; sourceTree = "<group>"; };
 		E4BB56762F0A00AA005F7388 /* icon.icns */ = {isa = PBXFileReference; lastKnownFileType = image.icns; name = icon.icns; path = ../Resources/icon.icns; sourceTree = "<group>"; };
 		E4FC7810183E50DC0064FB2E /* Accelerate.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = Accelerate.framework; path = /System/Library/Frameworks/Accelerate.framework; sourceTree = "<absolute>"; };
 		E4FC7837183E50F00064FB2E /* AGL.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = AGL.framework; path = /System/Library/Frameworks/AGL.framework; sourceTree = "<absolute>"; };
@@ -304,7 +304,7 @@
 			isa = PBXResourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
-				E4BB56752F09FAF4005F7388 /* dist in Resources */,
+				E4A7E3092F3B755E002755AF /* dist in Resources */,
 				E45328182F002767006BB098 /* MyApp.rc in Resources */,
 				E4236B282F04015D002D55C5 /* nlohmann in Resources */,
 				E4236B2A2F049AAE002D55C5 /* ja.lproj in Resources */,
