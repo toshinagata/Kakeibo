@@ -1,17 +1,6 @@
 import type { DataEntry, DataType} from "./types.ts"
 
-import { isTauri } from "@tauri-apps/api/core";
 import { vueRunner } from "./vueRunner.ts";
-
-/*  Tauri上で動いているかどうか：結果を windows.tauriIsAvailable にキャッシュ  */
-export function isTauriAvailable() {
-  if ((window as any).tauriIsAvailable === undefined) {
-    const b = ((isTauri && isTauri()) ? true : false);
-    (window as any).tauriIsAvailable = b;
-    console.log("window.tauriIsAvailable is set to " + b);
-  }
-  return ((window as any).tauriIsAvailable);
-}
 
 /*  VueRunner上で動いているかどうか：結果を windows.vueRunnerIsAvailable にキャッシュ  */
 export async function isVueRunnerAvailable() {

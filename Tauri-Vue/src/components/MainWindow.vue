@@ -19,17 +19,13 @@
 <script setup lang="ts">
 import { ref, provide, nextTick, onMounted, onUnmounted } from "vue"
 import type { DataEntry, CardEntry, DataType, DataMethods, Settings, SettingsMethods } from "../types.ts"
-import { isTauriAvailable, isVueRunnerAvailable, myAlertAsync, myConfirmAsync, myAskAsync, yearMonthToString, endMonthInData } from "../utils.ts"
+import { isVueRunnerAvailable, myAlertAsync, myConfirmAsync, myAskAsync, yearMonthToString, endMonthInData } from "../utils.ts"
 import MainTab from "./MainTab.vue"
 import SettingsTab from "./SettingsTab.vue"
 import CardTab from "./CardTab.vue"
 import TableTab from "./TableTab.vue"
 import GraphTab from "./GraphTab.vue"
 import IconButton from "./IconButton.vue"
-import { homeDir, join } from "@tauri-apps/api/path";
-import { mkdir, exists, create, rename, remove, readTextFile, writeTextFile, readDir }
-  from "@tauri-apps/plugin-fs";
-import { save } from "@tauri-apps/plugin-dialog";
 import { vHomeDir, vJoin, vMkdir, vExists, vCreate, vRename, vRemove, vReadTextFile, vWriteTextFile, vReadDir, vSaveDialog, vTerminate, vListenToServer }
   from "../vueRunner.ts";
 
@@ -139,13 +135,7 @@ const methods: DataMethods = {
     const csv = writeDataToString();
     let action = "";
     try {
-      if (isTauriAvailable()) {
-        action = "書き出し";
-        const path = await save({ defaultPath: 'kakeibo.csv' });
-        if (path) {
-          await writeTextFile(path, csv);
-        }
-      } else if (await isVueRunnerAvailable() && Number(document.location.port) < 8000) {
+      if (await isVueRunnerAvailable() && Number(document.location.port) < 8000) {
         //  vueRunner が 3000 番台のポートを使用：WebView で動作している
         action = "書き出し";
         const path = await vSaveDialog({ defaultPath: 'kakeibo.csv' });
@@ -449,28 +439,9 @@ async function initializeData() {
   let stage = 0;
   let newFile = false;
   console.log("initializeData() invoked");
-  console.log("Tauri is" + (isTauriAvailable() ? "" : " not") + " running")
   console.log("VueRunner is" + (await isVueRunnerAvailable() ? "" : " not") + " running")
   try {
-    if (isTauriAvailable()) {
-      /*  home に kakeibo/$(bookName) フォルダがなければ作成する  */
-      dataDir = await join(await homeDir(), "kakeibo/" + bookName.value);
-      await mkdir(dataDir, { recursive: true });
-      /*  kakeibo.csv がなければ作成する  */
-      stage = 1;
-      let dataPath = await join(dataDir, "kakeibo.csv");
-      if (!await exists(dataPath)) {
-        const file = await create(dataPath);
-        await file.close();
-        newFile = true;
-      }
-      /*  kakeibo.csv の内容を読む  */
-      stage = 2;
-      const dataText = await readTextFile(dataPath);
-      /*  家計簿データとして解釈する  */
-      stage = 3;
-      result = readDataFromString(dataText);
-    } else if (await isVueRunnerAvailable()) {
+    if (await isVueRunnerAvailable()) {
       /*  home に kakeibo/${bookName} フォルダがなければ作成する  */
       console.log("465: kakeibo + bookName.value is " + "kakeibo/" + bookName.value);
       dataDir = await vJoin(await vHomeDir(), "kakeibo/" + bookName.value);
@@ -539,18 +510,15 @@ async function initializeData() {
 
 /*  kakeibo ディレクトリを探索して、現在存在する家計簿の名前のリストを作る  */
 async function initializeBookNames() {
-  const tv = (isTauriAvailable() ? 0 : (await isVueRunnerAvailable() ? 1 : -1));
-  if (tv == -1) {
+  if (!(await isVueRunnerAvailable())) {
     return;
   }
-  const xJoin = (tv ? vJoin : join);
-  const xExists = (tv ? vExists : exists);
-  const rootDir = await xJoin(await (tv ? vHomeDir : homeDir)(), "kakeibo");
-  const dirs = (tv ? await vReadDir(rootDir) : (await readDir(rootDir)).map((e)=>e.name));
+  const rootDir = await vJoin(await vHomeDir(), "kakeibo");
+  const dirs = await vReadDir(rootDir);
   let filteredDirs: string[] = [];
   for (let name of dirs) {
     if (name !== "default") {
-      if (await xExists(await xJoin(rootDir, name + "/kakeibo.csv"))) {
+      if (await vExists(await vJoin(rootDir, name + "/kakeibo.csv"))) {
         filteredDirs.push(name);
       }
     }
@@ -572,8 +540,7 @@ async function handleBackup(dataDir: string, file: string) {
   }
   lastBackupDate = ymd;
   let stage = 1;
-  const tv = (isTauriAvailable() ? 0 : (await isVueRunnerAvailable() ? 1 : -1));
-  if (tv == -1) {
+  if (!(await isVueRunnerAvailable())) {
     return;
   }
   try {
@@ -582,24 +549,17 @@ async function handleBackup(dataDir: string, file: string) {
     const bname = (m ? m[1] : file);
     const ext = (m ? m[2] : "");
     /* もし「ファイル名_今日.拡張子」が存在しなければ、現存のファイルをその名前に変更する */
-    const fullPath = await (tv ? vJoin : join)(dataDir, bname + "_" + String(ymd) + ext);
-    if (!await (tv ? vExists : exists)(fullPath)) {
-      await (tv ? vRename : rename)(await (tv ? vJoin : join)(dataDir, file), fullPath);
+    const fullPath = await vJoin(dataDir, bname + "_" + String(ymd) + ext);
+    if (!await vExists(fullPath)) {
+      await vRename(await vJoin(dataDir, file), fullPath);
     }
     stage = 2;
     /* 「ファイル名_dddddddd.拡張子」にマッチするファイルのリストを取得して、降順に並べる  */
     const re = new RegExp("^" + bname + "_\\d{8}" + (ext == "" ? "" : "\\" + ext) + "$");
     let entries;
-    if (tv) {
-      entries = (await vReadDir(dataDir))
-        .filter((entry)=>entry.match(re))
-        .sort().reverse();      
-    } else {
-      entries = (await readDir(dataDir))
-        .filter((entry)=>entry.name.match(re))
-        .map((entry)=>entry.name)
-        .sort().reverse();
-    }
+    entries = (await vReadDir(dataDir))
+      .filter((entry)=>entry.match(re))
+      .sort().reverse();      
     /*  最初の10個は残す  */
     /*  その次の5個は、最後の1文字のみ違うものを１つずつ残す（10日に1個）  */
     /*  その次の5個は、最後の2文字のみ違うものを１つずつ残す（1ヶ月に1個）  */
@@ -645,7 +605,7 @@ async function handleBackup(dataDir: string, file: string) {
         }
       }
       if (remove_flag) {
-        await (tv ? vRemove : remove)(await (tv ? vJoin : join)(dataDir, entry));
+        await vRemove(await vJoin(dataDir, entry));
       } else {
         last_entry = entry;
       }
@@ -670,19 +630,7 @@ async function handleBackup(dataDir: string, file: string) {
 async function writeData() {
   let stage = 0;
   try {
-    if (isTauriAvailable()) {
-      /*  データファイルを更新  */
-      let dataDir = await join(await homeDir(), "kakeibo/" + bookName.value);
-      let dataPath = await join(dataDir, "kakeibo.csv");
-      const csv = writeDataToString();
-      stage = 1;
-      /*  バックアップを残す  */
-      await handleBackup(dataDir, "kakeibo.csv");
-      stage = 2;
-      await writeTextFile(dataPath, csv);
-      dataAreModified = false;
-      settingsAreModified = false;
-    } else if (await isVueRunnerAvailable()) {
+    if (await isVueRunnerAvailable()) {
       /*  データファイルを更新  */
       let dataDir = await vJoin(await vHomeDir(), "kakeibo/" + bookName.value);
       let dataPath = await vJoin(dataDir, "kakeibo.csv");
@@ -722,7 +670,7 @@ function updateToday() {
 
 /*  １秒ごとに実行するハンドラ  */
 async function timerHandler() {
-  if ((isTauriAvailable() || await isVueRunnerAvailable()) && (dataAreModified || settingsAreModified)) {
+  if (await isVueRunnerAvailable() && (dataAreModified || settingsAreModified)) {
     await writeData();
   }
 }
@@ -758,7 +706,7 @@ async function onBookSelected(event: Event) {
     console.log(`${newBookName} is selected`);
   }
   /*  現在の家計簿を保存  */
-  if (isTauriAvailable() || await isVueRunnerAvailable()) {
+  if (await isVueRunnerAvailable()) {
     await writeData();
   }
   /*  家計簿の名前を切り替えて初期化  */
@@ -797,7 +745,7 @@ onMounted(async () => {
 });
 onUnmounted(async () => {
   clearInterval(intervalID);
-  if (isTauriAvailable() || await isVueRunnerAvailable()) {
+  if (await isVueRunnerAvailable()) {
     await writeData();
   }
 });
