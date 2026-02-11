@@ -14,7 +14,7 @@ MyWebFrame::MyWebFrame(wxString &urlString)
 {
   wxString appName = wxTheApp->GetAppDisplayName();
   this->SetTitle(appName);
-  m_webview = wxWebView::New(this, -1, "", wxDefaultPosition, wxSize(720, 520), wxWebViewBackendDefault, 0, "");
+  m_webview = wxWebView::New(this, -1, "", wxDefaultPosition, wxSize(724, 524), wxWebViewBackendDefault, 0, "");
   wxBoxSizer *sizer = new wxBoxSizer(wxHORIZONTAL);
   sizer->Add(m_webview, 1, wxEXPAND);
   this->SetSizerAndFit(sizer);
