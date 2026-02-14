@@ -1,5 +1,5 @@
 #define MyAppName "わたしの家計簿"
-#define Version "0.1.0"
+#define Version "0.2.0"
 [Setup]
 AppName = {#MyAppName}
 AppVerName = {#MyAppName} {#Version}
