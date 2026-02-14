@@ -41,9 +41,22 @@ const bookNames = ref<string[]>([]);
 /*  ブック名の選択ボックス  */
 const selectBook = ref<HTMLSelectElement>();
 
-/*  data, settings が更新されたかどうか  */
-let dataAreModified = false;
-let settingsAreModified = false;
+/*  data/settings 更新後の自動保存  */
+/*  500 ms 後に自動保存する。もし自動保存待機中なら、待機を解除して改めて待機する  */
+let autoSaveRequested: ReturnType<typeof setTimeout> | undefined = undefined;
+async function requestAutoSave(req = true) {
+  if (await isVueRunnerAvailable()) {
+    if (autoSaveRequested) {
+      clearTimeout(autoSaveRequested);
+    }
+    if (req) {
+      autoSaveRequested = setTimeout(async () => {
+        autoSaveRequested = undefined;
+        await writeData();
+      }, 500);
+    }
+  }
+}
 
 /*  dataは連想配列、数値 YYYYMM をキーとする値が DataEntry の配列（その月の入出金データ） */
 const data = ref<DataType>({});
@@ -61,7 +74,7 @@ const methods: DataMethods = {
         } else if (key == "isIncome") {
           r[key] = value as boolean;
         }
-        dataAreModified = true;
+        requestAutoSave();
       }
   },
   insertRow(page: number, row: number,
@@ -72,23 +85,23 @@ const methods: DataMethods = {
           entry = { date: undefined, item: "", kind: "", isIncome: false, amount: undefined, card: ""};
         }
         p.splice(row, 0, entry);
-        dataAreModified = true;
+        requestAutoSave();
       }
   },
   deleteRow(page: number, row: number): void {
     let p = data.value?.[page];
     if (p !== undefined) {
       p.splice(row, 1);
-      dataAreModified = true;
+      requestAutoSave();
     }
   },
   insertPage(page: number): void {
     data.value[page] = [];
-    dataAreModified = true;
+    requestAutoSave();
   },
   deletePage(page: number): void {
     delete data.value[page];
-    dataAreModified = true;
+    requestAutoSave();
   },
   importCSV: async (file: File) => {
     let stage = 0;
@@ -118,6 +131,7 @@ const methods: DataMethods = {
         if (ym !== undefined) {
           setPageMonth(ym);
         }
+        requestAutoSave();
       }
     } catch (error: any) {
       let s = "";
@@ -181,16 +195,16 @@ const settings = ref<Settings>(JSON.parse(defaultSettings));
 const settingsMethods: SettingsMethods = {
   insertIncomeKind(kind: string, index: number): void {
     settings.value.incomeKinds.splice(index, 0, kind);
-    settingsAreModified = true;
+    requestAutoSave();
   },
   deleteIncomeKind(index: number): void {
     settings.value.incomeKinds.splice(index, 1);
-    settingsAreModified = true;
+    requestAutoSave();
   },
   replaceIncomeKind(kind: string, index: number): void {
     if (index >= 0 && index < settings.value.incomeKinds.length) {
       settings.value.incomeKinds[index] = kind;
-      settingsAreModified = true;
+      requestAutoSave();
     }
   },
   moveIncomeKind(fromIndex: number, toIndex: number): void {
@@ -200,7 +214,7 @@ const settingsMethods: SettingsMethods = {
       let kind = kinds[fromIndex];
       kinds.splice(fromIndex, 1);
       kinds.splice(toIndex, 0, kind);
-      settingsAreModified = true;
+      requestAutoSave();
     }
   },
   isIncomeKindInUse(kind: string): boolean {
@@ -215,16 +229,16 @@ const settingsMethods: SettingsMethods = {
   },
   insertPaymentKind(kind: string, index: number): void {
     settings.value.paymentKinds.splice(index, 0, kind);
-    settingsAreModified = true;
+    requestAutoSave();
   },
   deletePaymentKind(index: number): void {
     settings.value.paymentKinds.splice(index, 1);
-    settingsAreModified = true;
+    requestAutoSave();
   },
   replacePaymentKind(kind: string, index: number): void {
     if (index >= 0 && index < settings.value.paymentKinds.length) {
       settings.value.paymentKinds[index] = kind;
-      settingsAreModified = true;
+      requestAutoSave();
     }
   },
   movePaymentKind(fromIndex: number, toIndex: number): void {
@@ -234,7 +248,7 @@ const settingsMethods: SettingsMethods = {
       let kind = kinds[fromIndex];
       kinds.splice(fromIndex, 1);
       kinds.splice(toIndex, 0, kind);
-      settingsAreModified = true;
+      requestAutoSave();
     }
   },
   isPaymentKindInUse(kind: string): boolean {
@@ -250,24 +264,24 @@ const settingsMethods: SettingsMethods = {
   insertCardEntry(name: string, closing: number, index: number): void {
     const entry: CardEntry = { name: name, closing: closing };
     settings.value.cards.splice(index, 0, entry);
-    settingsAreModified = true;
+    requestAutoSave();
   },
   changeCardEntry(name: string | undefined, closing: number | undefined, index: number): void {
     let cards = settings.value.cards;
     if (index >= 0 && index < cards.length) {
       if (name !== undefined) {
         cards[index].name = name;
-        settingsAreModified = true;
+        requestAutoSave();
       }
       if (closing !== undefined) {
         cards[index].closing = closing;
-        settingsAreModified = true;
+        requestAutoSave();
       }
     }
   },
   deleteCardEntry(index: number): void {
     settings.value.cards.splice(index, 1);
-    settingsAreModified = true;
+    requestAutoSave();
   },
   moveCardEntry(fromIndex: number, toIndex: number): void {
     let cards = settings.value.cards;
@@ -276,7 +290,7 @@ const settingsMethods: SettingsMethods = {
       let card = cards[fromIndex];
       cards.splice(fromIndex, 1);
       cards.splice(toIndex, 0, card);
-      settingsAreModified = true;
+      requestAutoSave();
     }
   },
   isCardEntryInUse(name: string): boolean {
@@ -629,6 +643,9 @@ async function handleBackup(dataDir: string, file: string) {
 /* データ・設定をファイルに保存 */
 async function writeData() {
   let stage = 0;
+  if (autoSaveRequested) {
+    requestAutoSave(false);
+  }
   try {
     if (await isVueRunnerAvailable()) {
       /*  データファイルを更新  */
@@ -640,8 +657,6 @@ async function writeData() {
       await handleBackup(dataDir, "kakeibo.csv");
       stage = 2;
       await vWriteTextFile(dataPath, csv);
-      dataAreModified = false;
-      settingsAreModified = false;
     }
   } catch (error: any) {
     let s: string;
@@ -666,13 +681,6 @@ function updateToday() {
   let d = date.getDate();
   today.value = "今日は" + String(m) + "月" + String(d) + "日"
   thisMonth.value = y * 100 + m;
-}
-
-/*  １秒ごとに実行するハンドラ  */
-async function timerHandler() {
-  if (await isVueRunnerAvailable() && (dataAreModified || settingsAreModified)) {
-    await writeData();
-  }
 }
 
 /*  家計簿を切り替え、または新規作成  */
@@ -724,12 +732,10 @@ async function onBookSelected(event: Event) {
   })
 }
 
-let intervalID: ReturnType<typeof setInterval>;
 onMounted(async () => {
   updateToday();
   await initializeData();
   await initializeBookNames();
-  intervalID = setInterval(timerHandler, 1000);
   if (await isVueRunnerAvailable()) {
     window.addEventListener('beforeunload', (event) => {
       event.stopImmediatePropagation();   /* 離脱防止アラートを抑制する */
@@ -744,8 +750,7 @@ onMounted(async () => {
   }
 });
 onUnmounted(async () => {
-  clearInterval(intervalID);
-  if (await isVueRunnerAvailable()) {
+  if (await isVueRunnerAvailable() && autoSaveRequested) {
     await writeData();
   }
 });
